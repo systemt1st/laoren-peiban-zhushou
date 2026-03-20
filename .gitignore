@@ -1,0 +1,33 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+backend/.venv/
+backend/.coverage
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Database and runtime
+*.sqlite3
+*.db
+backend/data/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
