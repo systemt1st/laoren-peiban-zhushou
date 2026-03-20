@@ -1,0 +1,27 @@
+name: laoren-peiban-zhushou
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: laoren-peiban-backend
+    restart: unless-stopped
+    environment:
+      LPS_ENV: prod
+      LPS_DEBUG: "false"
+    volumes:
+      - ./backend/data:/app/data
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+    container_name: laoren-peiban-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
