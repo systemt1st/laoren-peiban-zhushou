@@ -63,6 +63,41 @@ const DEFAULT_MESSAGES: ChatMessage[] = [
   },
 ]
 
+const TAB_META: Record<
+  AppTab,
+  {
+    eyebrow: string
+    title: (preferredName: string) => string
+    subtitle: string
+  }
+> = {
+  home: {
+    eyebrow: '日常陪伴总览',
+    title: (preferredName) => `${preferredName}，一句话就能开始今天的陪伴`,
+    subtitle: '把语音作为主入口，把提醒、联系人和风险留痕整合成一个老人友好的日常面板。',
+  },
+  chat: {
+    eyebrow: '语音陪伴对话',
+    title: () => '开口即聊，文字只是备用',
+    subtitle: '优先使用语音对话；当识别到风险表达时，系统会自动引导进入应急模式。',
+  },
+  reminders: {
+    eyebrow: '用药与生活提醒',
+    title: () => '把该记住的事情，变成看得见的日程',
+    subtitle: '围绕吃药、喝水、复诊和散步建立稳定节律，减少遗忘与漏做。',
+  },
+  emergency: {
+    eyebrow: '高风险求助指挥界面',
+    title: () => '先求助，再说明情况',
+    subtitle: '此页面只做应急引导与留痕，不做医疗诊断；电话呼救始终排在第一优先级。',
+  },
+  family: {
+    eyebrow: '家属与后台追溯',
+    title: () => '联系人、画像与关键记录一屏可查',
+    subtitle: '让家属和后台快速看到谁可联系、最近发生了什么、哪些内容需要持续关注。',
+  },
+}
+
 const createId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
@@ -71,6 +106,26 @@ const createId = () => {
 }
 
 const nowIso = () => new Date().toISOString()
+
+function getNoticeTone(notice: string, activeTab: AppTab, isBootstrapping: boolean) {
+  if (activeTab === 'emergency' || notice.includes('风险') || notice.includes('应急')) {
+    return 'danger'
+  }
+  if (isBootstrapping || notice.includes('离线') || notice.includes('失败') || notice.includes('不稳定')) {
+    return 'warning'
+  }
+  return 'normal'
+}
+
+function getConnectionTone(notice: string, isBootstrapping: boolean) {
+  if (isBootstrapping) {
+    return 'warning'
+  }
+  if (notice.includes('离线') || notice.includes('失败') || notice.includes('不稳定')) {
+    return 'warning'
+  }
+  return 'ok'
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('home')
@@ -164,6 +219,8 @@ function App() {
         startTransition(() => {
           setActiveTab('emergency')
         })
+      } else {
+        setNotice('已完成一轮陪伴对话。')
       }
     } catch {
       const localReply =
@@ -182,6 +239,7 @@ function App() {
       const created = await createReminder({ title, time })
       setReminders((prev) => [created, ...prev])
       appendRecord('reminder', `新增提醒：${title} ${time}`, 'normal')
+      setNotice('提醒已保存。')
     } catch {
       const localItem: ReminderItem = { id: createId(), title, time, enabled: true }
       setReminders((prev) => [localItem, ...prev])
@@ -197,6 +255,7 @@ function App() {
     try {
       await updateReminderStatus(id, nextEnabled)
       appendRecord('reminder', `提醒状态变更：${nextEnabled ? '开启' : '暂停'}`, 'normal')
+      setNotice(`提醒已${nextEnabled ? '开启' : '暂停'}。`)
     } catch {
       setReminders((prev) =>
         prev.map((item) => (item.id === id ? { ...item, enabled: !nextEnabled } : item)),
@@ -220,6 +279,7 @@ function App() {
     const contact = await createContact(input)
     setContacts((prev) => [...prev, contact].sort((a, b) => a.priority - b.priority))
     appendRecord('system', `已添加紧急联系人：${input.name}`, 'normal')
+    setNotice('联系人已保存。')
   }
 
   async function handleSpeakLastReply() {
@@ -251,10 +311,23 @@ function App() {
     weekday: 'long',
   })
 
-  const primaryContact = contacts[0]
+  const primaryContact = [...contacts].sort((a, b) => a.priority - b.priority)[0]
+  const nextReminder = [...reminders]
+    .filter((item) => item.enabled)
+    .sort((a, b) => a.time.localeCompare(b.time))[0]
+  const latestDangerRecord = records.find((item) => item.level === 'danger')
+  const currentMeta = TAB_META[activeTab]
+  const noticeTone = getNoticeTone(notice, activeTab, isBootstrapping)
+  const connectionTone = getConnectionTone(notice, isBootstrapping)
 
   let page = (
-    <HomePage profile={profile} reminders={reminders} contacts={contacts} onOpenTab={openTab} />
+    <HomePage
+      profile={profile}
+      reminders={reminders}
+      contacts={contacts}
+      records={records}
+      onOpenTab={openTab}
+    />
   )
 
   if (activeTab === 'chat') {
@@ -289,20 +362,93 @@ function App() {
   }
 
   if (activeTab === 'family') {
-    page = <FamilyPage profile={profile} contacts={contacts} records={records} onAddContact={handleAddContact} />
+    page = (
+      <FamilyPage
+        profile={profile}
+        contacts={contacts}
+        records={records}
+        onAddContact={handleAddContact}
+      />
+    )
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${activeTab === 'emergency' ? 'emergency-mode' : ''}`}>
       <header className="app-header">
-        <p className="app-date">{todayText}</p>
-        <h1 className="app-title">老人陪伴助手</h1>
-        <p className="app-subtitle">开口就能用，关键时刻有指引、有留痕。</p>
-        <p className="banner">{notice}</p>
+        <div className="header-topbar">
+          <div>
+            <p className="brand-kicker">语音陪伴与生活助手</p>
+            <p className="brand-name">老人陪伴助手</p>
+          </div>
+
+          <div className="topbar-actions">
+            <span className={`status-pill ${connectionTone}`}>
+              {isBootstrapping ? '同步中' : notice.includes('离线') ? '离线兜底' : '服务在线'}
+            </span>
+            <button
+              type="button"
+              className={`topbar-button ${activeTab === 'emergency' ? 'ghost' : 'danger'}`}
+              onClick={() => openTab(activeTab === 'emergency' ? 'home' : 'emergency')}
+            >
+              {activeTab === 'emergency' ? '返回首页' : '紧急模式'}
+            </button>
+          </div>
+        </div>
+
+        <section className={`hero-card ${activeTab === 'emergency' ? 'emergency' : ''}`}>
+          <div className="hero-copy">
+            <p className="hero-eyebrow">{currentMeta.eyebrow}</p>
+            <h1 className="hero-title">{currentMeta.title(profile.preferredName)}</h1>
+            <p className="hero-subtitle">{currentMeta.subtitle}</p>
+
+            <div className="hero-tags">
+              <span className="hero-tag">{todayText}</span>
+              <span className="hero-tag">
+                {profile.age} 岁
+                {profile.city ? ` · ${profile.city}` : ''}
+              </span>
+              <span className="hero-tag">{activeTab === 'emergency' ? '电话优先' : '语音优先'}</span>
+            </div>
+          </div>
+
+          <div className="hero-metrics">
+            <article className="metric-card">
+              <p className="metric-label">下一条提醒</p>
+              <p className="metric-value">{nextReminder ? nextReminder.time : '未设置'}</p>
+              <p className="metric-note">{nextReminder ? nextReminder.title : '去提醒页补充日程'}</p>
+            </article>
+
+            <article className="metric-card">
+              <p className="metric-label">第一联系人</p>
+              <p className="metric-value">{primaryContact ? primaryContact.name : '未设置'}</p>
+              <p className="metric-note">
+                {primaryContact
+                  ? `${primaryContact.relation} · ${primaryContact.phone}`
+                  : '去家属页添加紧急联系人'}
+              </p>
+            </article>
+
+            <article className="metric-card">
+              <p className="metric-label">安全状态</p>
+              <p className="metric-value">{latestDangerRecord ? '近期有风险留痕' : '当前平稳'}</p>
+              <p className="metric-note">
+                {latestDangerRecord
+                  ? latestDangerRecord.summary
+                  : isBootstrapping
+                    ? '正在同步服务与记录'
+                    : '可随时进入应急区求助'}
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <p className={`notice-banner ${noticeTone}`} aria-live="polite">
+          {notice}
+        </p>
       </header>
 
       <main className="app-main">
-        {isBootstrapping ? <p className="loading-tip">正在同步数据...</p> : null}
+        {isBootstrapping ? <p className="boot-note">正在同步用户画像、提醒与联系人...</p> : null}
         {page}
       </main>
 

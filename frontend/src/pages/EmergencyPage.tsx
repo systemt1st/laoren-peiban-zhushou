@@ -6,63 +6,108 @@ interface EmergencyPageProps {
   onOpenTab: (tab: AppTab) => void
 }
 
+const SYMPTOMS = [
+  { title: '胸痛', detail: '胸口压迫、冒汗、放射痛', notes: '建议立刻呼叫 120。' },
+  { title: '呼吸困难', detail: '说话费力、喘不过气', notes: '保持通风，优先求助。' },
+  { title: '头晕或意识不清', detail: '站立不稳、说话混乱', notes: '尽量坐下或平躺。' },
+  { title: '摔倒', detail: '疑似骨折或无法起身', notes: '不要勉强站起。' },
+]
+
+const STEPS = [
+  '先拨打 120，或立即联系第一联系人。',
+  '保持通话畅通，尽量坐下或平躺，不要独自外出。',
+  '如果能说话，清楚说明症状开始时间、当前位置和既往病史。',
+  '电话求助后，再查看家属页和留痕记录，方便后续追溯。',
+]
+
 export function EmergencyPage({ primaryContact, onEmergency, onOpenTab }: EmergencyPageProps) {
-  async function submitEmergency(symptom: string) {
-    await onEmergency(symptom, '')
+  async function submitEmergency(symptom: string, notes: string) {
+    await onEmergency(symptom, notes)
   }
 
   return (
     <>
-      <section className="panel">
-        <h2 className="panel-title">紧急模式</h2>
-        <div className="emergency-banner">
-          <p>此页面只做求助引导，不做医疗诊断。若症状加重，请优先拨打 120。</p>
+      <section className="emergency-stage">
+        <div className="panel-head">
+          <div>
+            <p className="section-kicker">应急主动作</p>
+            <h2 className="section-title">先打电话，再补充症状说明。</h2>
+          </div>
         </div>
 
-        <div className="btn-row">
-          <a className="btn danger" href="tel:120">
+        <p className="section-subtitle">
+          这里不做医疗诊断，只做明确可执行的求助引导。若症状加重或无法判断，请直接拨打 120。
+        </p>
+
+        <div className="emergency-call-grid">
+          <a className="btn danger large block" href="tel:120">
             立即拨打 120
           </a>
           {primaryContact ? (
-            <a className="btn secondary" href={`tel:${primaryContact.phone}`}>
-              呼叫{primaryContact.relation}
+            <a className="btn secondary large block" href={`tel:${primaryContact.phone}`}>
+              联系{primaryContact.relation}：{primaryContact.name}
             </a>
-          ) : null}
+          ) : (
+            <button type="button" className="btn ghost large block" onClick={() => onOpenTab('family')}>
+              先补充紧急联系人
+            </button>
+          )}
+        </div>
+
+        <div className="emergency-note">
+          <p className="journey-title">当前建议</p>
+          <p className="journey-text">若胸痛、呼吸困难、摔倒无法起身，请不要等待页面反馈，直接电话求助。</p>
         </div>
       </section>
 
       <section className="panel">
-        <h2 className="panel-title">快速症状上报</h2>
+        <div className="panel-head">
+          <div>
+            <p className="section-kicker">快速上报</p>
+            <h2 className="section-title">按最接近的症状留痕，方便家属和后台追溯。</h2>
+          </div>
+        </div>
+
+        <div className="symptom-grid">
+          {SYMPTOMS.map((item) => (
+            <button
+              key={item.title}
+              type="button"
+              className="symptom-card"
+              onClick={() => {
+                void submitEmergency(item.title, item.notes)
+              }}
+            >
+              <span className="symptom-title">{item.title}</span>
+              <span className="symptom-detail">{item.detail}</span>
+              <span className="symptom-note">{item.notes}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <p className="section-kicker">求助步骤</p>
+            <h2 className="section-title">照着做，不需要额外判断流程。</h2>
+          </div>
+        </div>
+
+        <div className="guidance-list">
+          {STEPS.map((step, index) => (
+            <article key={step} className="guidance-card">
+              <span className="step-index">{index + 1}</span>
+              <p className="journey-text">{step}</p>
+            </article>
+          ))}
+        </div>
+
         <div className="btn-row">
-          <button type="button" className="btn danger" onClick={() => void submitEmergency('胸痛')}>
-            胸痛
-          </button>
-          <button type="button" className="btn danger" onClick={() => void submitEmergency('头晕')}>
-            头晕
-          </button>
-          <button
-            type="button"
-            className="btn danger"
-            onClick={() => void submitEmergency('呼吸困难')}
-          >
-            呼吸困难
-          </button>
-          <button type="button" className="btn danger" onClick={() => void submitEmergency('摔倒')}>
-            摔倒
+          <button type="button" className="btn ghost" onClick={() => onOpenTab('family')}>
+            查看联系人与关键记录
           </button>
         </div>
-      </section>
-
-      <section className="panel">
-        <h2 className="panel-title">建议步骤</h2>
-        <ol className="step-list">
-          <li>保持通话畅通，先联系 120 或家属。</li>
-          <li>坐下或平躺，尽量保持呼吸平稳。</li>
-          <li>在家属页查看是否已有应急记录。</li>
-        </ol>
-        <button type="button" className="btn primary" onClick={() => onOpenTab('family')}>
-          查看联系人与记录
-        </button>
       </section>
     </>
   )
